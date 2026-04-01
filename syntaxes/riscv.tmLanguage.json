@@ -1,0 +1,31 @@
+{
+    "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+    "name": "RISC-V",
+    "patterns": [
+        {
+            "name": "comment.line.number-sign.riscv",
+            "match": "#.*$",
+            "comment": "C风格绿色注释"
+        },
+        {
+            "name": "keyword.control.riscv",
+            "match": "\\b(add|addi|sub|lui|auipc|jal|jalr|beq|bne|blt|bge|bltu|bgeu|lb|lh|lw|lbu|lhu|sb|sh|sw|sll|slli|slt|slti|sltiu|sltu|srl|srli|sra|srai|or|ori|and|andi|ecall|ebreak|mul|div|rem|beqz|bnez|j|jr|la|li|mv|neg|nop|not|ret)\\b"
+        },
+        {
+            "name": "variable.parameter.register.riscv",
+            "match": "\\b(x[0-9]|x[1-2][0-9]|x3[0-1]|zero|ra|sp|gp|tp|t[0-6]|s[0-9]|s10|s11|a[0-7])\\b",
+            "comment": "寄存器"
+        },
+        {
+            "name": "entity.name.tag.label.definition.riscv",
+            "match": "^[\\t ]*[a-zA-Z_][a-zA-Z0-9_]*:",
+            "comment": "标签定义"
+        },
+        {
+            "name": "constant.numeric.riscv",
+            "match": "\\b(0x[0-9a-fA-F]+|0b[01]+|\\d+)\\b",
+            "comment": "数字"
+        }
+    ],
+    "scopeName": "source.riscv"
+}

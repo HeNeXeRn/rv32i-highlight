@@ -1,0 +1,29 @@
+# 源代码与编译配置
+.vscode/**
+src/**
+tsconfig.json
+esbuild.js
+eslint.config.mjs
+.gitignore
+.vscodeignore
+
+# 测试相关
+.vscode-test/**
+out/test/**
+
+# 依赖与产物
+node_modules/**
+**/*.map
+**/*.ts
+!**/*.d.ts
+
+# 文档与元数据
+vsc-extension-quickstart.md
+.git/**
+.github/**
+images/source/**
+*.vsix
+
+# 排除不需要打包的 npm 文件
+package-lock.json
+package.json (仅保留运行时需要的字段，打包工具会自动处理)

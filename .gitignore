@@ -1,0 +1,18 @@
+# 依赖
+node_modules/
+
+# 编译产物
+dist/
+out/
+
+# 日志与临时文件
+*.log
+.vscode-test/
+vsc-extension-quickstart.md
+
+# 操作系统文件
+.DS_Store
+Thumbs.db
+
+# 插件打包文件
+*.vsix

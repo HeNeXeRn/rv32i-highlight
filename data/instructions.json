@@ -1,0 +1,329 @@
+{
+  "RV32I": {
+    "description": "基础 32 位整数指令集",
+    "instructions": [
+      {
+        "label": "add",
+        "detail": "add rd, rs1, rs2",
+        "documentation": "加法：R[rd] = R[rs1] + R[rs2]",
+        "insertText": "add ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "sub",
+        "detail": "sub rd, rs1, rs2",
+        "documentation": "减法：R[rd] = R[rs1] - R[rs2]",
+        "insertText": "sub ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "and",
+        "detail": "and rd, rs1, rs2",
+        "documentation": "按位与：R[rd] = R[rs1] & R[rs2]",
+        "insertText": "and ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "or",
+        "detail": "or rd, rs1, rs2",
+        "documentation": "按位或：R[rd] = R[rs1] | R[rs2]",
+        "insertText": "or ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "xor",
+        "detail": "xor rd, rs1, rs2",
+        "documentation": "按位异或：R[rd] = R[rs1] ^ R[rs2]",
+        "insertText": "xor ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "sll",
+        "detail": "sll rd, rs1, rs2",
+        "documentation": "逻辑左移：R[rd] = R[rs1] << R[rs2]",
+        "insertText": "sll ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "srl",
+        "detail": "srl rd, rs1, rs2",
+        "documentation": "逻辑右移：R[rd] = R[rs1] >> R[rs2] (Zero-extend)",
+        "insertText": "srl ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "sra",
+        "detail": "sra rd, rs1, rs2",
+        "documentation": "算术右移：R[rd] = R[rs1] >> R[rs2] (Sign-extend)",
+        "insertText": "sra ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "slt",
+        "detail": "slt rd, rs1, rs2",
+        "documentation": "有符号小于则置1：if (R[rs1] < R[rs2]) { R[rd] = 1; } else { R[rd] = 0; }",
+        "insertText": "slt ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "sltu",
+        "detail": "sltu rd, rs1, rs2",
+        "documentation": "无符号小于则置1：if (R[rs1] < R[rs2]) { R[rd] = 1; } else { R[rd] = 0; }",
+        "insertText": "sltu ${1:x1}, ${2:x2}, ${3:x3}"
+      },
+      {
+        "label": "addi",
+        "detail": "addi rd, rs1, imm",
+        "documentation": "加立即数：R[rd] = R[rs1] + imm",
+        "insertText": "addi ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "andi",
+        "detail": "andi rd, rs1, imm",
+        "documentation": "按位与立即数：R[rd] = R[rs1] & imm",
+        "insertText": "andi ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "ori",
+        "detail": "ori rd, rs1, imm",
+        "documentation": "按位或立即数：R[rd] = R[rs1] | imm",
+        "insertText": "ori ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "xori",
+        "detail": "xori rd, rs1, imm",
+        "documentation": "按位异或立即数：R[rd] = R[rs1] ^ imm",
+        "insertText": "xori ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "slli",
+        "detail": "slli rd, rs1, imm",
+        "documentation": "逻辑左移立即数：R[rd] = R[rs1] << imm",
+        "insertText": "slli ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "srli",
+        "detail": "srli rd, rs1, imm",
+        "documentation": "逻辑右移立即数：R[rd] = R[rs1] >> imm (Zero-extend)",
+        "insertText": "srli ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "srai",
+        "detail": "srai rd, rs1, imm",
+        "documentation": "算术右移立即数：R[rd] = R[rs1] >> imm (Sign-extend)",
+        "insertText": "srai ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "slti",
+        "detail": "slti rd, rs1, imm",
+        "documentation": "有符号小于立即数则置1：if (R[rs1] < imm) { R[rd] = 1; } else { R[rd] = 0; }",
+        "insertText": "slti ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "sltiu",
+        "detail": "sltiu rd, rs1, imm",
+        "documentation": "无符号小于立即数则置1：if (R[rs1] < imm) { R[rd] = 1; } else { R[rd] = 0; }",
+        "insertText": "sltiu ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "lb",
+        "detail": "lb rd, offset(rs1)",
+        "documentation": "加载有符号字节：R[rd] = M[R[rs1] + imm][7:0] (Sign-extend)",
+        "insertText": "lb ${1:x1}, ${2:0}(${3:sp})"
+      },
+      {
+        "label": "lbu",
+        "detail": "lbu rd, offset(rs1)",
+        "documentation": "加载无符号字节：R[rd] = M[R[rs1] + imm][7:0] (Zero-extend)",
+        "insertText": "lbu ${1:x1}, ${2:0}(${3:sp})"
+      },
+      {
+        "label": "lh",
+        "detail": "lh rd, offset(rs1)",
+        "documentation": "加载有符号半字：R[rd] = M[R[rs1] + imm][15:0] (Sign-extend)",
+        "insertText": "lh ${1:x1}, ${2:0}(${3:sp})"
+      },
+      {
+        "label": "lhu",
+        "detail": "lhu rd, offset(rs1)",
+        "documentation": "加载无符号半字：R[rd] = M[R[rs1] + imm][15:0] (Zero-extend)",
+        "insertText": "lhu ${1:x1}, ${2:0}(${3:sp})"
+      },
+      {
+        "label": "lw",
+        "detail": "lw rd, offset(rs1)",
+        "documentation": "加载字：R[rd] = M[R[rs1] + imm][31:0]",
+        "insertText": "lw ${1:x1}, ${2:0}(${3:sp})"
+      },
+      {
+        "label": "sb",
+        "detail": "sb rs2, offset(rs1)",
+        "documentation": "存储字节：M[R[rs1] + imm][7:0] = R[rs2][7:0]",
+        "insertText": "sb ${1:x1}, ${2:0}(${3:sp})"
+      },
+      {
+        "label": "sh",
+        "detail": "sh rs2, offset(rs1)",
+        "documentation": "存储半字：M[R[rs1] + imm][15:0] = R[rs2][15:0]",
+        "insertText": "sh ${1:x1}, ${2:0}(${3:sp})"
+      },
+      {
+        "label": "sw",
+        "detail": "sw rs2, offset(rs1)",
+        "documentation": "存储字：M[R[rs1] + imm][31:0] = R[rs2][31:0]",
+        "insertText": "sw ${1:x1}, ${2:0}(${3:sp})"
+      },
+      {
+        "label": "beq",
+        "detail": "beq rs1, rs2, label",
+        "documentation": "相等则跳转：if (R[rs1] == R[rs2]) PC = PC + offset",
+        "insertText": "beq ${1:x1}, ${2:x2}, ${3:label}"
+      },
+      {
+        "label": "bne",
+        "detail": "bne rs1, rs2, label",
+        "documentation": "不相等则跳转：if (R[rs1] != R[rs2]) PC = PC + offset",
+        "insertText": "bne ${1:x1}, ${2:x2}, ${3:label}"
+      },
+      {
+        "label": "blt",
+        "detail": "blt rs1, rs2, label",
+        "documentation": "有符号小于则跳转：if (R[rs1] < R[rs2]) PC = PC + offset",
+        "insertText": "blt ${1:x1}, ${2:x2}, ${3:label}"
+      },
+      {
+        "label": "bltu",
+        "detail": "bltu rs1, rs2, label",
+        "documentation": "无符号小于则跳转：if (R[rs1] < R[rs2]) PC = PC + offset",
+        "insertText": "bltu ${1:x1}, ${2:x2}, ${3:label}"
+      },
+      {
+        "label": "bge",
+        "detail": "bge rs1, rs2, label",
+        "documentation": "有符号大于等于则跳转：if (R[rs1] >= R[rs2]) PC = PC + offset",
+        "insertText": "bge ${1:x1}, ${2:x2}, ${3:label}"
+      },
+      {
+        "label": "bgeu",
+        "detail": "bgeu rs1, rs2, label",
+        "documentation": "无符号大于等于则跳转：if (R[rs1] >= R[rs2]) PC = PC + offset",
+        "insertText": "bgeu ${1:x1}, ${2:x2}, ${3:label}"
+      },
+      {
+        "label": "jal",
+        "detail": "jal rd, label",
+        "documentation": "跳转并链接：R[rd] = PC + 4; PC = PC + offset",
+        "insertText": "jal ${1:x1}, ${2:label}"
+      },
+      {
+        "label": "jalr",
+        "detail": "jalr rd, rs1, imm",
+        "documentation": "寄存器跳转并链接：R[rd] = PC + 4; PC = R[rs1] + imm",
+        "insertText": "jalr ${1:x1}, ${2:x0}, ${3:0}"
+      },
+      {
+        "label": "auipc",
+        "detail": "auipc rd, immu",
+        "documentation": "PC加高位立即数：imm = immu << 12; R[rd] = PC + imm",
+        "insertText": "auipc ${1:x1}, ${2:0}"
+      },
+      {
+        "label": "lui",
+        "detail": "lui rd, immu",
+        "documentation": "加载高位立即数：imm = immu << 12; R[rd] = imm",
+        "insertText": "lui ${1:x1}, ${2:0}"
+      },
+      {
+        "label": "ebreak",
+        "detail": "ebreak",
+        "documentation": "环境断点：Asks the debugger to do something (imm = 0)",
+        "insertText": "ebreak"
+      },
+      {
+        "label": "ecall",
+        "detail": "ecall",
+        "documentation": "环境调用：Asks the OS to do something (imm = 1)",
+        "insertText": "ecall"
+      }
+    ]
+  },
+  "RV32M": {
+    "description": "乘除法扩展",
+    "instructions": [
+      {
+        "label": "mul",
+        "detail": "mul rd, rs1, rs2",
+        "documentation": "乘法：R[rd] = (R[rs1]) * (R[rs2])",
+        "insertText": "mul ${1:x1}, ${2:x2}, ${3:x3}"
+      }
+    ]
+  },
+  "Pseudo": {
+    "description": "RISC-V 标准伪指令",
+    "instructions": [
+      {
+        "label": "beqz",
+        "detail": "beqz rs1, label",
+        "documentation": "等于零则跳转: if (R[rs1] == 0) PC += offset (等价于 beq rs1, x0, label)",
+        "insertText": "beqz ${1:x1}, ${2:label}"
+      },
+      {
+        "label": "bnez",
+        "detail": "bnez rs1, label",
+        "documentation": "不等于零则跳转: if (R[rs1] != 0) PC += offset (等价于 bne rs1, x0, label)",
+        "insertText": "bnez ${1:x1}, ${2:label}"
+      },
+      {
+        "label": "j",
+        "detail": "j label",
+        "documentation": "无条件跳转: PC += offset (等价于 jal x0, label)",
+        "insertText": "j ${1:label}"
+      },
+      {
+        "label": "jal",
+        "detail": "jal label",
+        "documentation": "跳转并链接: R[ra] = PC + 4; PC += offset (等价于 jal ra, label)",
+        "insertText": "jal ${1:label}"
+      },
+      {
+        "label": "jr",
+        "detail": "jr rs1",
+        "documentation": "寄存器跳转: PC = R[rs1] (等价于 jalr x0, rs1, 0)",
+        "insertText": "jr ${1:ra}"
+      },
+      {
+        "label": "la",
+        "detail": "la rd, label",
+        "documentation": "加载符号地址: R[rd] = &label (等价于 auipc + addi)",
+        "insertText": "la ${1:x10}, ${2:label}"
+      },
+      {
+        "label": "li",
+        "detail": "li rd, imm",
+        "documentation": "加载立即数: R[rd] = imm (等价于 lui 和/或 addi)",
+        "insertText": "li ${1:x10}, ${2:100}"
+      },
+      {
+        "label": "mv",
+        "detail": "mv rd, rs1",
+        "documentation": "寄存器复制: R[rd] = R[rs1] (等价于 addi rd, rs1, 0)",
+        "insertText": "mv ${1:x1}, ${2:x2}"
+      },
+      {
+        "label": "neg",
+        "detail": "neg rd, rs1",
+        "documentation": "取负数: R[rd] = -R[rs1] (等价于 sub rd, x0, rs1)",
+        "insertText": "neg ${1:x1}, ${2:x2}"
+      },
+      {
+        "label": "nop",
+        "detail": "nop",
+        "documentation": "空操作: 什么都不做 (等价于 addi x0, x0, 0)",
+        "insertText": "nop"
+      },
+      {
+        "label": "not",
+        "detail": "not rd, rs1",
+        "documentation": "按位取反: R[rd] = ~R[rs1] (等价于 xori rd, rs1, -1)",
+        "insertText": "not ${1:x1}, ${2:x2}"
+      },
+      {
+        "label": "ret",
+        "detail": "ret",
+        "documentation": "从子程序返回: PC = R[ra] (等价于 jalr x0, ra, 0)",
+        "insertText": "ret"
+      }
+    ]
+  }
+}
