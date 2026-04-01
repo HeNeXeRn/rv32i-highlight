@@ -2,7 +2,8 @@
   "name": "rv32i-highlight",
   "displayName": "rv32i-highlight",
   "description": "Highlighter for RV32I Assembly",
-  "version": "0.0.1",
+  "version": "0.0.2",
+  "publisher": "",
   "repository": {
     "type": "git",
     "url": "https://github.com/HeNeXeRn/rv32i-highlight.git"

@@ -52,3 +52,12 @@
 1. 打开 `.s`、`.asm` 或 `.riscv` 后缀的文件。
 2. 试试输入 `addi`，补全提示会自动弹出来。
 3. 找一段乱糟糟的代码，按 `Shift + Alt + F`，体验一下一键对齐的快乐。
+
+## 📦 安装方法 (Manual Installation)
+
+由于本插件尚未发布至 Marketplace，请通过以下步骤手动安装：
+
+1. 前往 [Releases](https://github.com/HeNeXeRn/rv32i-highlight/releases) 页面。
+2. 下载最新的 `.vsix` 文件。
+3. 在 VS Code 中打开扩展面板 (`Ctrl+Shift+X`)。
+4. 点击右上角 `...` -> `Install from VSIX...`，选择下载的文件。

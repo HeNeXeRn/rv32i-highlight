@@ -69,7 +69,7 @@ export function activate(context: vscode.ExtensionContext) {
 		statusBarItem.show();
 	};
 
-	// --- 4. 诊断：标签重复与未定义检查 (修复注释/寄存器Bug) ---
+	// --- 4. 诊断：标签重复与未定义检查 (修复 Windows \r 换行符 Bug) ---
 	const diagnosticCollection = vscode.languages.createDiagnosticCollection('riscv');
 
 	const updateDiagnostics = (document: vscode.TextDocument) => {
@@ -78,15 +78,22 @@ export function activate(context: vscode.ExtensionContext) {
 		const text = document.getText();
 		const definedLabels = new Map<string, vscode.Range>();
 
-		// 第一遍：扫描定义的标签
 		const lines = text.split(/\r?\n/);
+
+		// --- 第一步：扫描所有定义的标签 ---
 		lines.forEach((lineText, lineIndex) => {
-			const cleanLine = lineText.split('#')[0];
-			const defMatch = /^[\t ]*([a-zA-Z_][a-zA-Z0-9_]*):/.exec(cleanLine);
+			// 1. 去掉注释
+			// 2. 使用 trim() 移除 Windows 下末尾可能的 \r 以及前后空格
+			const cleanLine = lineText.split('#')[0].trim();
+
+			// 匹配 "label:" 格式
+			const defMatch = /^([a-zA-Z_][a-zA-Z0-9_]*):/.exec(cleanLine);
 			if (defMatch) {
 				const label = defMatch[1];
+				// 在原始行中精确定位标签位置（用于高亮显示错误）
 				const startChar = lineText.indexOf(label);
 				const range = new vscode.Range(lineIndex, startChar, lineIndex, startChar + label.length);
+
 				if (definedLabels.has(label)) {
 					diagnostics.push(new vscode.Diagnostic(range, `标签 "${label}" 已重复定义`, vscode.DiagnosticSeverity.Error));
 				} else {
@@ -95,30 +102,51 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		});
 
-		// 第二遍：扫描跳转指令
-		const instRegex = /\b(j|jal|beq|bne|blt|bge|bltu|bgeu)\b([^#\n]+)/g;
+		// --- 第二步：扫描指令中的跳转目标 ---
+		// 正则解释：匹配跳转指令后的操作数部分，直到注释或换行
+		const instRegex = /\b(j|jal|beq|bne|blt|bge|bltu|bgeu)\b([^#\r\n]+)/g;
 		let match;
 		while ((match = instRegex.exec(text)) !== null) {
 			const matchIndex = match.index;
+			const fullMatchText = match[0];
+			const operandsText = match[2];
+
+			// 排除掉在注释行内部的误触
 			const lineAtPos = document.lineAt(document.positionAt(matchIndex));
 			const commentIndex = lineAtPos.text.indexOf('#');
+			if (commentIndex !== -1 && document.positionAt(matchIndex).character > commentIndex) {
+				continue;
+			}
 
-			// 排除注释里的匹配
-			if (commentIndex !== -1 && document.positionAt(matchIndex).character > commentIndex) continue;
+			// 核心修复：切分操作数并对每一项进行 trim()，移除隐藏的 \r
+			const words = operandsText.split(/[\t ,]+/)
+				.map(w => w.trim())
+				.filter(w => w.length > 0);
 
-			const operandsText = match[2];
-			const words = operandsText.split(/[\t ,]+/).filter(w => w.trim().length > 0);
 			if (words.length > 0) {
+				// 在 RISC-V 汇编中，跳转目标通常是最后一个操作数
 				const potentialLabel = words[words.length - 1];
-				// 排除寄存器和数字立即数
-				if (!registerMap.has(potentialLabel) && !/^-?\d+/.test(potentialLabel) && !definedLabels.has(potentialLabel)) {
-					const labelOffset = match[0].lastIndexOf(potentialLabel);
+
+				// 过滤掉：1. 寄存器  2. 数字/立即数  3. 已定义的标签
+				const isRegister = registerMap.has(potentialLabel);
+				const isNumber = /^-?\d+/.test(potentialLabel) || /^0x[0-9a-fA-F]+/.test(potentialLabel);
+				const isDefined = definedLabels.has(potentialLabel);
+
+				if (!isRegister && !isNumber && !isDefined) {
+					// 计算该标签在当前匹配文本中的准确偏移量
+					const labelOffset = fullMatchText.lastIndexOf(potentialLabel);
 					const startPos = document.positionAt(matchIndex + labelOffset);
 					const range = new vscode.Range(startPos, startPos.translate(0, potentialLabel.length));
-					diagnostics.push(new vscode.Diagnostic(range, `未定义的标签: "${potentialLabel}"`, vscode.DiagnosticSeverity.Error));
+
+					diagnostics.push(new vscode.Diagnostic(
+						range,
+						`未定义的标签: "${potentialLabel}"`,
+						vscode.DiagnosticSeverity.Error
+					));
 				}
 			}
 		}
+
 		diagnosticCollection.set(document.uri, diagnostics);
 	};
 
@@ -354,26 +382,26 @@ export function activate(context: vscode.ExtensionContext) {
 	});
 
 	// --- 8.5 Hover Provider (悬停显示说明) ---
-    const hoverProvider = vscode.languages.registerHoverProvider('riscv', {
-        provideHover(document, position) {
-            const range = document.getWordRangeAtPosition(position);
-            if (!range) return null;
-            const word = document.getText(range);
+	const hoverProvider = vscode.languages.registerHoverProvider('riscv', {
+		provideHover(document, position) {
+			const range = document.getWordRangeAtPosition(position);
+			if (!range) return null;
+			const word = document.getText(range);
 
-            // 优先查指令
-            const inst = instructionMap.get(word);
-            if (inst) {
-                return new vscode.Hover(new vscode.MarkdownString(`**指令**: ${inst.detail}\n\n${inst.documentation}`));
-            }
+			// 优先查指令
+			const inst = instructionMap.get(word);
+			if (inst) {
+				return new vscode.Hover(new vscode.MarkdownString(`**指令**: ${inst.detail}\n\n${inst.documentation}`));
+			}
 
-            // 再查寄存器
-            const reg = registerMap.get(word);
-            if (reg) {
-                return new vscode.Hover(new vscode.MarkdownString(`**寄存器**: ${reg.name} (${reg.abi || 'N/A'})\n\n**描述**: ${reg.description}\n\n**用途**: ${reg.usage}`));
-            }
-            return null;
-        }
-    });
+			// 再查寄存器
+			const reg = registerMap.get(word);
+			if (reg) {
+				return new vscode.Hover(new vscode.MarkdownString(`**寄存器**: ${reg.name} (${reg.abi || 'N/A'})\n\n**描述**: ${reg.description}\n\n**用途**: ${reg.usage}`));
+			}
+			return null;
+		}
+	});
 
 	// --- 9. 注册监听与 Provider ---
 	context.subscriptions.push(
