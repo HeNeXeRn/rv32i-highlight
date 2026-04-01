@@ -3,6 +3,14 @@
   "displayName": "rv32i-highlight",
   "description": "Highlighter for RV32I Assembly",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/HeNeXeRn/rv32i-highlight.git"
+  },
+  "bugs": {
+    "url": "https://github.com/HeNeXeRn/rv32i-highlight/issues"
+  },
+  "homepage": "https://github.com/HeNeXeRn/rv32i-highlight#readme",
   "engines": {
     "vscode": "^1.103.0"
   },
