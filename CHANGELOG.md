@@ -1,9 +1,38 @@
-# Change Log
+# Changelog
 
-All notable changes to the "rv32i-highlight" extension will be documented in this file.
+本文件记录该 RISC-V 扩展的所有显著更新。
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+---
 
-## [Unreleased]
+## [0.1.0] - 2026-4-2
 
-- Initial release
+### 🚀 新增 (Added)
+- **静态地址模拟**：指令悬停现在会显示该指令在内存中的 16 进制模拟地址（基址 0x0）。
+- **标签偏移计算**：
+    - 悬停在标签定义处显示其绝对地址。
+    - 悬停在跳转指令（如 `jal`, `beq` 等）的操作数上，自动计算并显示目标标签与当前 PC 的有符号十进制相对偏移（Relative Offset）。
+- **增强型悬停 (Hover)**：
+    - 指令说明中加入地址信息。
+    - 寄存器悬停信息现在包含 ABI 名称、用途描述及标准用法。
+
+---
+
+## [0.0.2] - 2026-4-1
+
+### 🛠️ 修复 (Fixed)
+- **跨平台兼容性**：修复了 Windows 系统下因 `\r\n` 换行符导致“未定义标签”诊断报错的 Bug。
+- **注释对齐优化**：修复了在格式化代码时，指令后跟随的注释无法整齐对齐的问题。
+
+### 🔄 变更 (Changed)
+- **状态栏增强**：更新了状态栏 UI 样式，现在提供更精确的指令计数和基于 4 字节/指令的预估二进制大小（Estimated Size）。
+- **格式化逻辑**：优化了跳转类指令（J-Type/B-Type）的操作数对齐逻辑，使其更符合汇编编码习惯。
+
+---
+
+## [0.0.1] - 2026-4-1
+
+### 🚀 初始版本发布
+- 实现 RISC-V 指令和寄存器的基础语法高亮。
+- 提供核心指令集的自动补全与 Snippets。
+- 基础的标签重复定义检查。
+- 提供简单的代码格式化功能。
