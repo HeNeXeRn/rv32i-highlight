@@ -381,27 +381,112 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
-	// --- 8.5 Hover Provider (悬停显示说明) ---
-	const hoverProvider = vscode.languages.registerHoverProvider('riscv', {
-		provideHover(document, position) {
-			const range = document.getWordRangeAtPosition(position);
-			if (!range) return null;
-			const word = document.getText(range);
+	// --- 8.5 Hover Provider (悬停显示说明、地址与偏移) ---
+    const hoverProvider = vscode.languages.registerHoverProvider('riscv', {
+        provideHover(document, position) {
+            const range = document.getWordRangeAtPosition(position);
+            if (!range) return null;
+            const word = document.getText(range);
+            const lineIndex = position.line;
+            const lineText = document.lineAt(lineIndex).text;
 
-			// 优先查指令
-			const inst = instructionMap.get(word);
-			if (inst) {
-				return new vscode.Hover(new vscode.MarkdownString(`**指令**: ${inst.detail}\n\n${inst.documentation}`));
-			}
+            // --- 1. 预计算全文档地址映射 ---
+            // 每次悬停时重新计算以保证实时性（小文档性能损耗可忽略）
+            const { labelAddrMap, instAddrMap } = calculateAddresses(document);
 
-			// 再查寄存器
-			const reg = registerMap.get(word);
-			if (reg) {
-				return new vscode.Hover(new vscode.MarkdownString(`**寄存器**: ${reg.name} (${reg.abi || 'N/A'})\n\n**描述**: ${reg.description}\n\n**用途**: ${reg.usage}`));
-			}
-			return null;
-		}
-	});
+            const markdown = new vscode.MarkdownString();
+            markdown.isTrusted = true;
+
+            // --- 2. 判定当前悬停内容的性质 ---
+            
+            // A. 检查是否是指令
+            const inst = instructionMap.get(word);
+            // B. 检查是否是寄存器
+            const reg = registerMap.get(word);
+            // C. 检查是否是标签定义 (word 后面紧跟冒号)
+            const isLabelDef = new RegExp(`\\b${word}\\s*:`).test(lineText);
+            // D. 检查是否在跳转指令的操作数中 (标签引用)
+            const isLabelRef = labelAddrMap.has(word) && !isLabelDef;
+
+            // --- 3. 构造显示内容 ---
+
+            // 情况 1: 指令 (显示详细文档 + 16进制地址)
+            if (inst) {
+                const addr = instAddrMap.get(lineIndex);
+                const addrStr = addr !== undefined ? `0x${addr.toString(16).toUpperCase()}` : "N/A";
+                
+                markdown.appendMarkdown(`**指令**: \`${word}\` (地址: \`${addrStr}\`)\n\n`);
+                markdown.appendMarkdown(`> ${inst.detail}\n\n${inst.documentation}`);
+                return new vscode.Hover(markdown);
+            }
+
+            // 情况 2: 寄存器
+            if (reg) {
+                markdown.appendMarkdown(`**寄存器**: ${reg.name} (${reg.abi || 'N/A'})\n\n`);
+                markdown.appendMarkdown(`**描述**: ${reg.description}\n\n**用途**: ${reg.usage}`);
+                return new vscode.Hover(markdown);
+            }
+
+            // 情况 3: 标签定义处 (显示标签绝对地址)
+            if (isLabelDef && labelAddrMap.has(word)) {
+                const addr = labelAddrMap.get(word);
+                markdown.appendMarkdown(`**标签定义**: \`${word}\`\n\n`);
+                markdown.appendMarkdown(`**内存地址**: \`0x${addr?.toString(16).toUpperCase()}\``);
+                return new vscode.Hover(markdown);
+            }
+
+            // 情况 4: 标签引用处 (显示相对距离)
+            if (isLabelRef) {
+                const targetAddr = labelAddrMap.get(word)!;
+                const currentInstAddr = instAddrMap.get(lineIndex);
+
+                markdown.appendMarkdown(`**标签引用**: \`${word}\`\n\n`);
+                markdown.appendMarkdown(`**目标地址**: \`0x${targetAddr.toString(16).toUpperCase()}\`\n\n`);
+
+                if (currentInstAddr !== undefined) {
+                    const offset = targetAddr - currentInstAddr;
+                    const sign = offset >= 0 ? "+" : "";
+                    markdown.appendMarkdown(`**相对偏移**: \`${sign}${offset}\` bytes (PC ${sign}${offset})`);
+                }
+                return new vscode.Hover(markdown);
+            }
+
+            return null;
+        }
+    });
+
+    /**
+     * 辅助函数：扫描文档并计算地址映射
+     */
+    function calculateAddresses(document: vscode.TextDocument) {
+        const labelAddrMap = new Map<string, number>();
+        const instAddrMap = new Map<number, number>(); // lineIndex -> address
+        let currentAddress = 0;
+
+        for (let i = 0; i < document.lineCount; i++) {
+            const line = document.lineAt(i).text.split('#')[0].trim();
+            if (!line) continue;
+
+            // 处理标签定义
+            const labelMatch = /^([a-zA-Z_][a-zA-Z0-9_]*):/.exec(line);
+            if (labelMatch) {
+                const labelName = labelMatch[1];
+                labelAddrMap.set(labelName, currentAddress);
+                // 注意：同一行可能既有标签又有指令，例如 "loop: add x1, x2, x3"
+                const remaining = line.substring(labelMatch[0].length).trim();
+                if (remaining && !remaining.startsWith('.')) {
+                    instAddrMap.set(i, currentAddress);
+                    currentAddress += 4;
+                }
+            } 
+            // 处理普通指令 (排除伪指令 .section, .global 等)
+            else if (!line.startsWith('.')) {
+                instAddrMap.set(i, currentAddress);
+                currentAddress += 4;
+            }
+        }
+        return { labelAddrMap, instAddrMap };
+    }
 
 	// --- 9. 注册监听与 Provider ---
 	context.subscriptions.push(

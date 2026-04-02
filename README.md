@@ -27,23 +27,27 @@
 
 ---
 
-## 📸 截图展示
+## 📸 功能截图展示
 
-### 1. 代码对齐效果
-![格式化演示](./images/format_demo.png)
-*（截了一段包含普通指令和 jal 的代码，能明显看到逗号和注释都对齐了）*
+### 1. 极致对齐效果
+<img src="./images/format_demo.png" width="600" alt="格式化演示">
+*(截取一段包含普通指令和 jal 指令的代码块，展示逗号对齐和注释对齐的效果)*
 
 ### 2. 悬停提示与补全
-![补全演示](./images/hover_demo.png)
-*（鼠标悬停在 addi 指令上，弹出带格式的说明文档）*
+<img src="./images/hover_demo.png" width="600" alt="补全演示">
+*(鼠标悬停在 `addi` 指令上，弹出带格式的说明文档)*
 
 ### 3. 错误实时提醒
-![诊断演示](./images/diag_demo.png)
-*（一个没定义的标签被标了红色波浪线，鼠标移上去会提示具体错误）*
+<img src="./images/diag_demo.png" width="600" alt="诊断演示">
+*(一个没定义的标签被标了红色波浪线，鼠标移上去会提示具体错误)*
 
 ### 4. 状态栏统计
-![状态栏演示](./images/statusbar_demo.png)  
-*（状态栏显示了当前文件的指令总数和估算的二进制体积，例如 $(chip) RISC-V: 20 指令 | ~80 Bytes）*
+<img src="./images/statusbar_demo.png" width="600" alt="状态栏演示">
+*(状态栏显示了当前文件的指令总数和估算的二进制体积，例如 `$(chip) RISC-V: 20 指令 | ~80 Bytes`)*
+
+### 5. 地址与相对偏移悬停
+<img src="./images/address_hover_demo.png" width="600" alt="地址悬停演示">
+*(鼠标悬停在指令上会显示该指令的模拟运行地址，悬停在标签上会显示标签对应的地址；如果是跳转指令，还会自动计算并显示目标地址与当前指令的偏移量，如 `beq → 0x10 (+12)`)*
 
 ---
 
