@@ -8,6 +8,13 @@ const legend = new vscode.SemanticTokensLegend(tokenTypes);
 const RISCV_DISASM_LANGUAGE_ID = 'riscv-disasm';
 
 export function activate(context: vscode.ExtensionContext) {
+	const ensureDisasmLanguage = (document: vscode.TextDocument) => {
+		if (document.uri.scheme !== 'file') return;
+		if (document.languageId === RISCV_DISASM_LANGUAGE_ID) return;
+		if (!/\.disasm$/i.test(document.fileName)) return;
+		void vscode.languages.setTextDocumentLanguage(document, RISCV_DISASM_LANGUAGE_ID);
+	};
+
 	// --- 2. 加载数据文件 ---
 	const loadJson = (fileName: string) => {
 		const filePath = path.join(context.extensionPath, 'data', fileName);
@@ -1096,18 +1103,25 @@ export function activate(context: vscode.ExtensionContext) {
 		disasmHoverProvider,
 		disasmDefinitionProvider,
 		disasmFormattingProvider,
-		vscode.window.onDidChangeActiveTextEditor(e => { if (e) updateStatusBar(e.document); }),
+		vscode.window.onDidChangeActiveTextEditor(e => {
+			if (e) {
+				ensureDisasmLanguage(e.document);
+				updateStatusBar(e.document);
+			}
+		}),
 		vscode.workspace.onDidChangeTextDocument(e => {
 			updateDiagnostics(e.document);
 			updateStatusBar(e.document);
 		}),
 		vscode.workspace.onDidOpenTextDocument(doc => {
+			ensureDisasmLanguage(doc);
 			updateDiagnostics(doc);
 			updateStatusBar(doc);
 		})
 	);
 
 	if (vscode.window.activeTextEditor) {
+		ensureDisasmLanguage(vscode.window.activeTextEditor.document);
 		updateDiagnostics(vscode.window.activeTextEditor.document);
 		updateStatusBar(vscode.window.activeTextEditor.document);
 	}

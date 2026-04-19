@@ -43,7 +43,8 @@
           "riscv-disasm"
         ],
         "extensions": [
-          ".disasm"
+          ".disasm",
+          ".DISASM"
         ]
       }
     ],
