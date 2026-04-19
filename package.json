@@ -71,7 +71,7 @@
         "language": "riscv",
         "scopes": {
           "definedLabel": [
-            "entity.name.tag"
+            "entity.name.tag.label.definition.riscv"
           ]
         }
       }
@@ -79,6 +79,12 @@
     "configurationDefaults": {
       "editor.tokenColorCustomizations": {
         "textMateRules": [
+          {
+            "scope": "entity.name.tag.label.definition.riscv",
+            "settings": {
+              "foreground": "#E5E510"
+            }
+          },
           {
             "scope": "keyword.control.riscv.disasm",
             "settings": {
@@ -108,6 +114,13 @@
             }
           }
         ]
+      },
+      "editor.semanticTokenColorCustomizations": {
+        "rules": {
+          "definedLabel:riscv": {
+            "foreground": "#E5E510"
+          }
+        }
       }
     }
   },
