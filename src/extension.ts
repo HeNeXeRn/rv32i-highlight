@@ -5,6 +5,7 @@ import * as path from 'path';
 // --- 1. 定义语义令牌类型 ---
 const tokenTypes = ['definedLabel'];
 const legend = new vscode.SemanticTokensLegend(tokenTypes);
+const RISCV_DISASM_LANGUAGE_ID = 'riscv-disasm';
 
 export function activate(context: vscode.ExtensionContext) {
 	// --- 2. 加载数据文件 ---
@@ -302,12 +303,12 @@ export function activate(context: vscode.ExtensionContext) {
 							// 跳转指令：右对齐Op1 + ", " + 剩下的
 							const op1 = (line.ops[0] || "").padStart(maxOp1Len, ' ');
 							const rest = line.ops.slice(1).join(', ');
-							currentLen += maxOp1Len + (rest ? 2 + rest.length : 0);
+							currentLen += op1.length + (rest ? 2 + rest.length : 0);
 						} else {
 							// 普通指令：Op1右对齐 + (Op2右对齐) + (Op3左对齐)
 							currentLen += maxOp1Len;
-							if (line.ops.length > 1) currentLen += 2 + maxOp2Len;
-							if (line.ops.length > 2) currentLen += 2 + maxOp3Len;
+								if (line.ops.length > 1) currentLen += 2 + maxOp2Len;
+								if (line.ops.length > 2) currentLen += 2 + maxOp3Len;
 						}
 						maxLineLengthWithoutComment = Math.max(maxLineLengthWithoutComment, currentLen);
 					}
@@ -511,6 +512,577 @@ export function activate(context: vscode.ExtensionContext) {
 		}
 	});
 
+	interface DisasmTargetToken {
+		expression: string;
+		label: string | null;
+		offset: number;
+		absoluteAddress: number | null;
+		start: number;
+		end: number;
+	}
+
+	interface DisasmNavigationIndex {
+		labelToLine: Map<string, number>;
+		labelToAddress: Map<string, number>;
+		addressToLine: Map<number, number>;
+		addressToPreferredLine: Map<number, number>;
+	}
+
+	const parseDisasmNumber = (raw: string): number | null => {
+		const text = raw.trim();
+		if (!text) return null;
+
+		const sign = text.startsWith('-') ? -1 : 1;
+		const normalized = /^[+-]/.test(text) ? text.slice(1) : text;
+
+		if (/^0x[0-9a-fA-F]+$/.test(normalized)) {
+			const value = Number.parseInt(normalized, 16);
+			return Number.isNaN(value) ? null : sign * value;
+		}
+
+		if (/^\d+$/.test(normalized)) {
+			const value = Number.parseInt(normalized, 10);
+			return Number.isNaN(value) ? null : sign * value;
+		}
+
+		return null;
+	};
+
+	const stripDisasmLineComment = (lineText: string): string => {
+		const hashIndex = lineText.indexOf('#');
+		const slashIndex = lineText.indexOf('//');
+		let cutAt = lineText.length;
+		if (hashIndex >= 0) cutAt = Math.min(cutAt, hashIndex);
+		if (slashIndex >= 0) cutAt = Math.min(cutAt, slashIndex);
+		return lineText.substring(0, cutAt);
+	};
+
+	const buildDisasmNavigationIndex = (document: vscode.TextDocument): DisasmNavigationIndex => {
+		const labelToLine = new Map<string, number>();
+		const labelToAddress = new Map<string, number>();
+		const addressToLine = new Map<number, number>();
+		const addressToPreferredLine = new Map<number, number>();
+		let pendingLabels: string[] = [];
+
+		for (let line = 0; line < document.lineCount; line++) {
+			const rawText = document.lineAt(line).text;
+			const content = stripDisasmLineComment(rawText).trim();
+
+			if (!content) continue;
+
+			const plainLabelMatch = /^([a-zA-Z_][a-zA-Z0-9_.$@]*):/.exec(content);
+			if (plainLabelMatch) {
+				const label = plainLabelMatch[1];
+				if (!labelToLine.has(label)) {
+					labelToLine.set(label, line);
+				}
+				pendingLabels.push(label);
+			}
+
+			const addressMatch = /^\s*(0x[0-9a-fA-F]+|\d+)\b/.exec(rawText);
+			if (!addressMatch) continue;
+
+			const address = parseDisasmNumber(addressMatch[1]);
+			if (address === null) continue;
+
+			if (!addressToLine.has(address)) {
+				addressToLine.set(address, line);
+			}
+			if (!addressToPreferredLine.has(address)) {
+				addressToPreferredLine.set(address, line);
+			}
+
+			const inlineLabelMatch = /<([a-zA-Z_][a-zA-Z0-9_.$@]*)>:\s*$/.exec(content);
+			if (inlineLabelMatch) {
+				const label = inlineLabelMatch[1];
+				if (!labelToLine.has(label)) {
+					labelToLine.set(label, line);
+				}
+				if (!labelToAddress.has(label)) {
+					labelToAddress.set(label, address);
+				}
+				const labelLine = labelToLine.get(label);
+				if (labelLine !== undefined) {
+					addressToPreferredLine.set(address, labelLine);
+				}
+			}
+
+			if (pendingLabels.length > 0) {
+				for (const label of pendingLabels) {
+					if (!labelToAddress.has(label)) {
+						labelToAddress.set(label, address);
+					}
+					const labelLine = labelToLine.get(label);
+					if (labelLine !== undefined) {
+						addressToPreferredLine.set(address, labelLine);
+					}
+				}
+				pendingLabels = [];
+			}
+		}
+
+		return {
+			labelToLine,
+			labelToAddress,
+			addressToLine,
+			addressToPreferredLine
+		};
+	};
+
+	const parseDisasmTargetAtPosition = (lineText: string, character: number): DisasmTargetToken | null => {
+		const targetRegex = /<([^>]+)>/g;
+		let targetMatch: RegExpExecArray | null;
+
+		while ((targetMatch = targetRegex.exec(lineText)) !== null) {
+			const start = targetMatch.index;
+			const end = start + targetMatch[0].length;
+			if (character < start || character > end) {
+				continue;
+			}
+
+			const expression = targetMatch[1].trim();
+			if (!expression) return null;
+
+			const absoluteAddress = parseDisasmNumber(expression);
+			if (absoluteAddress !== null) {
+				return {
+					expression,
+					label: null,
+					offset: 0,
+					absoluteAddress,
+					start,
+					end
+				};
+			}
+
+			const refMatch = /^([a-zA-Z_][a-zA-Z0-9_.$@]*)([+-](?:0x[0-9a-fA-F]+|\d+))?$/.exec(expression);
+			if (!refMatch) return null;
+
+			const offset = refMatch[2] ? parseDisasmNumber(refMatch[2]) : 0;
+			if (offset === null) return null;
+
+			return {
+				expression,
+				label: refMatch[1],
+				offset,
+				absoluteAddress: null,
+				start,
+				end
+			};
+		}
+
+		return null;
+	};
+
+	const resolveDisasmTargetAddress = (
+		target: DisasmTargetToken,
+		navIndex: DisasmNavigationIndex
+	): number | null => {
+		if (target.absoluteAddress !== null) {
+			return target.absoluteAddress;
+		}
+
+		if (!target.label) return null;
+		const baseAddress = navIndex.labelToAddress.get(target.label);
+		if (baseAddress === undefined) return null;
+		return baseAddress + target.offset;
+	};
+
+	const makeLineSelectionRange = (
+		document: vscode.TextDocument,
+		line: number,
+		anchorText?: string
+	): vscode.Range => {
+		const lineText = document.lineAt(line).text;
+		let startCharacter = 0;
+		let endCharacter = 0;
+
+		if (anchorText) {
+			const anchorIndex = lineText.indexOf(anchorText);
+			if (anchorIndex >= 0) {
+				startCharacter = anchorIndex;
+				endCharacter = anchorIndex + anchorText.length;
+			}
+		}
+
+		if (endCharacter === 0) {
+			const nonWhitespace = lineText.search(/\S/);
+			startCharacter = nonWhitespace >= 0 ? nonWhitespace : 0;
+			endCharacter = startCharacter;
+		}
+
+		return new vscode.Range(
+			new vscode.Position(line, startCharacter),
+			new vscode.Position(line, endCharacter)
+		);
+	};
+
+	const makeDefinitionLink = (
+		document: vscode.TextDocument,
+		originSelectionRange: vscode.Range,
+		line: number,
+		anchorText?: string
+	): vscode.LocationLink => {
+		const targetRange = document.lineAt(line).range;
+		const targetSelectionRange = makeLineSelectionRange(document, line, anchorText);
+
+		return {
+			originSelectionRange,
+			targetUri: document.uri,
+			targetRange,
+			targetSelectionRange
+		};
+	};
+
+	const disasmHoverProvider = vscode.languages.registerHoverProvider(RISCV_DISASM_LANGUAGE_ID, {
+		provideHover(document, position) {
+			const lineText = document.lineAt(position.line).text;
+			const navIndex = buildDisasmNavigationIndex(document);
+			const targetToken = parseDisasmTargetAtPosition(lineText, position.character);
+
+			if (targetToken) {
+				const markdown = new vscode.MarkdownString();
+				markdown.isTrusted = true;
+				markdown.appendMarkdown(`**跳转目标**: \`<${targetToken.expression}>\`\n\n`);
+
+				const targetAddress = resolveDisasmTargetAddress(targetToken, navIndex);
+				if (targetAddress !== null) {
+					markdown.appendMarkdown(`**解析地址**: \`0x${targetAddress.toString(16).toUpperCase()}\`\n\n`);
+
+					const targetLine =
+						navIndex.addressToPreferredLine.get(targetAddress)
+						?? navIndex.addressToLine.get(targetAddress);
+
+					if (targetLine !== undefined) {
+						markdown.appendMarkdown(`**目标行**: 第 ${targetLine + 1} 行\n\n`);
+						const preview = document.lineAt(targetLine).text.trim();
+						if (preview.length > 0) {
+							markdown.appendCodeblock(preview, 'riscv');
+						}
+					}
+				} else {
+					markdown.appendMarkdown('**提示**: 无法解析目标地址。');
+				}
+
+				const hoverRange = new vscode.Range(
+					new vscode.Position(position.line, targetToken.start),
+					new vscode.Position(position.line, targetToken.end)
+				);
+				return new vscode.Hover(markdown, hoverRange);
+			}
+
+			const range = document.getWordRangeAtPosition(position);
+			if (!range) return null;
+			const word = document.getText(range);
+			const markdown = new vscode.MarkdownString();
+			markdown.isTrusted = true;
+
+			const inst = instructionMap.get(word);
+			if (inst) {
+				const addrMatch = /^\s*(0x[0-9a-fA-F]+|\d+)\b/.exec(lineText);
+				const addr = addrMatch ? parseDisasmNumber(addrMatch[1]) : null;
+				const addrStr = addr !== null ? `0x${addr.toString(16).toUpperCase()}` : 'N/A';
+				markdown.appendMarkdown(`**指令**: \`${word}\` (地址: \`${addrStr}\`)\n\n`);
+				markdown.appendMarkdown(`> ${inst.detail}\n\n${inst.documentation}`);
+				return new vscode.Hover(markdown);
+			}
+
+			const reg = registerMap.get(word);
+			if (reg) {
+				markdown.appendMarkdown(`**寄存器**: ${reg.name} (${reg.abi || 'N/A'})\n\n`);
+				markdown.appendMarkdown(`**描述**: ${reg.description}\n\n**用途**: ${reg.usage}`);
+				return new vscode.Hover(markdown);
+			}
+
+			if (navIndex.labelToAddress.has(word)) {
+				const addr = navIndex.labelToAddress.get(word);
+				if (addr !== undefined) {
+					markdown.appendMarkdown(`**标签**: \`${word}\`\n\n`);
+					markdown.appendMarkdown(`**内存地址**: \`0x${addr.toString(16).toUpperCase()}\``);
+					return new vscode.Hover(markdown);
+				}
+			}
+
+			return null;
+		}
+	});
+
+	const disasmDefinitionProvider = vscode.languages.registerDefinitionProvider(RISCV_DISASM_LANGUAGE_ID, {
+		provideDefinition(document, position) {
+			const navIndex = buildDisasmNavigationIndex(document);
+			const lineText = document.lineAt(position.line).text;
+			const targetToken = parseDisasmTargetAtPosition(lineText, position.character);
+
+			if (targetToken) {
+				const targetOriginRange = new vscode.Range(
+					new vscode.Position(position.line, targetToken.start),
+					new vscode.Position(position.line, targetToken.end)
+				);
+
+				const targetAddress = resolveDisasmTargetAddress(targetToken, navIndex);
+				if (targetAddress !== null) {
+					const targetLine =
+						navIndex.addressToPreferredLine.get(targetAddress)
+						?? navIndex.addressToLine.get(targetAddress);
+
+					if (targetLine !== undefined) {
+						return [makeDefinitionLink(document, targetOriginRange, targetLine, targetToken.label ?? undefined)];
+					}
+				}
+
+				if (targetToken.label) {
+					const labelLine = navIndex.labelToLine.get(targetToken.label);
+					if (labelLine !== undefined) {
+						return [makeDefinitionLink(document, targetOriginRange, labelLine, targetToken.label)];
+					}
+				}
+				return null;
+			}
+
+			const range = document.getWordRangeAtPosition(position);
+			if (!range) return null;
+			const word = document.getText(range);
+			const labelLine = navIndex.labelToLine.get(word);
+			if (labelLine !== undefined) {
+				return [makeDefinitionLink(document, range, labelLine, word)];
+			}
+
+			return null;
+		}
+	});
+
+	const disasmFormattingProvider = vscode.languages.registerDocumentFormattingEditProvider(RISCV_DISASM_LANGUAGE_ID, {
+		provideDocumentFormattingEdits(document: vscode.TextDocument) {
+			const edits: vscode.TextEdit[] = [];
+			const lineCount = document.lineCount;
+			const NON_LABEL_INDENT = '    ';
+
+			interface DisasmInstLine {
+				type: 'instruction';
+				range: vscode.Range;
+				prefix: string;
+				opcode: string;
+				ops: string[];
+				comment?: string;
+				isJump: boolean;
+			}
+
+			interface DisasmOtherLine {
+				type: 'empty' | 'comment' | 'other' | 'label';
+				range: vscode.Range;
+				content: string;
+				leadingSpaces: number;
+			}
+
+			type DisasmLineInfo = DisasmInstLine | DisasmOtherLine;
+
+			const splitDisasmComment = (lineText: string): { content: string; comment?: string } => {
+				const hashIndex = lineText.indexOf('#');
+				const slashIndex = lineText.indexOf('//');
+				let cutAt = lineText.length;
+				if (hashIndex >= 0) cutAt = Math.min(cutAt, hashIndex);
+				if (slashIndex >= 0) cutAt = Math.min(cutAt, slashIndex);
+
+				const content = lineText.substring(0, cutAt).trimEnd();
+				const comment = cutAt < lineText.length ? lineText.substring(cutAt).trim() : undefined;
+				return { content, comment };
+			};
+
+			const splitDisasmOperand = (rawOperand?: string): { base: string; label: string } => {
+				const operand = (rawOperand || '').trim();
+				if (!operand) return { base: '', label: '' };
+
+				const labelMatch = /^(.*?)(\s*<[^>]+>)$/.exec(operand);
+				if (!labelMatch) return { base: operand, label: '' };
+
+				const base = labelMatch[1].trim();
+				const label = labelMatch[2].trim();
+				if (!base) return { base: operand, label: '' };
+
+				return { base, label };
+			};
+
+			const getDisasmOperandBaseWidth = (rawOperand?: string): number => {
+				return splitDisasmOperand(rawOperand).base.length;
+			};
+
+			const renderDisasmOperand = (rawOperand?: string): { text: string; baseLength: number } => {
+				const parts = splitDisasmOperand(rawOperand);
+				const text = parts.label ? `${parts.base} ${parts.label}` : parts.base;
+				return { text, baseLength: parts.base.length };
+			};
+
+			const appendAlignedOperand = (
+				rawOperand: string | undefined,
+				width: number,
+				hasNext: boolean
+			): string => {
+				const rendered = renderDisasmOperand(rawOperand);
+				if (!rendered.text) return '';
+				if (!hasNext) return rendered.text;
+				const padCount = Math.max(0, width - rendered.baseLength);
+				return rendered.text + ',' + ' '.repeat(padCount + 1);
+			};
+
+			const buildAlignedOperands = (
+				line: DisasmInstLine,
+				maxOp1Len: number,
+				maxOp2Len: number,
+				maxOp3Len: number
+			): string => {
+				let result = '';
+				if (line.ops.length > 0) {
+					result += appendAlignedOperand(line.ops[0], maxOp1Len, line.ops.length > 1);
+				}
+				if (line.ops.length > 1) {
+					result += appendAlignedOperand(line.ops[1], maxOp2Len, line.ops.length > 2);
+				}
+				if (line.ops.length > 2) {
+					result += appendAlignedOperand(line.ops[2], maxOp3Len, line.ops.length > 3);
+				}
+				if (line.ops.length > 3) {
+					const tail = line.ops.slice(3).join(', ');
+					if (tail) {
+						result += `, ${tail}`;
+					}
+				}
+				return result;
+			};
+
+			const isLabelOnlyLine = (text: string): boolean => {
+				return /^[A-Za-z_][A-Za-z0-9_]*:$/.test(text.trim());
+			};
+
+			const allLines: DisasmLineInfo[] = [];
+
+			for (let lineIndex = 0; lineIndex < lineCount; lineIndex++) {
+				const line = document.lineAt(lineIndex);
+				const text = line.text;
+				const trimmed = text.trim();
+
+				if (!trimmed) {
+					allLines.push({ type: 'empty', range: line.range, content: '', leadingSpaces: 0 });
+					continue;
+				}
+
+				const { content, comment } = splitDisasmComment(text);
+				const core = content.trim();
+
+				if (!core && comment) {
+					allLines.push({
+						type: 'comment',
+						range: line.range,
+						content: comment,
+						leadingSpaces: Math.max(0, text.search(/\S/))
+					});
+					continue;
+				}
+
+				const disasmMatch = /^\s*(0x[0-9a-fA-F]+|\d+)(?:\s+(<[^>]+>))?:\s*(.*)$/.exec(content);
+				if (!disasmMatch) {
+					if (isLabelOnlyLine(core)) {
+						const mergedLabel = comment ? `${core}  ${comment}` : core;
+						allLines.push({ type: 'label', range: line.range, content: mergedLabel, leadingSpaces: 0 });
+						continue;
+					}
+					const merged = comment ? `${core}  ${comment}` : core;
+					allLines.push({ type: 'other', range: line.range, content: merged, leadingSpaces: 0 });
+					continue;
+				}
+
+				const address = disasmMatch[1];
+				const offsetTag = disasmMatch[2];
+				const body = (disasmMatch[3] || '').trim();
+				const prefix = offsetTag ? `${address} ${offsetTag}:` : `${address}:`;
+
+				if (!body) {
+					const merged = comment ? `${prefix}  ${comment}` : prefix;
+					allLines.push({ type: 'other', range: line.range, content: merged, leadingSpaces: 0 });
+					continue;
+				}
+
+				const firstSpace = body.search(/\s/);
+				let opcode = body;
+				let ops: string[] = [];
+				if (firstSpace !== -1) {
+					opcode = body.substring(0, firstSpace).trim();
+					ops = body.substring(firstSpace).split(',').map(part => part.trim()).filter(part => part.length > 0);
+				}
+
+				const isJump = /^(jal|jalr)$/i.test(opcode);
+				allLines.push({
+					type: 'instruction',
+					range: line.range,
+					prefix,
+					opcode,
+					ops,
+					comment,
+					isJump
+				});
+			}
+
+			let i = 0;
+			while (i < allLines.length) {
+				if (allLines[i].type === 'instruction') {
+					let j = i;
+					let maxPrefixLen = 0;
+					let maxOpcodeLen = 0;
+					let maxOp1Len = 0;
+					let maxOp2Len = 0;
+					let maxOp3Len = 0;
+					let maxLineLengthWithoutComment = 0;
+
+					while (j < allLines.length && allLines[j].type === 'instruction') {
+						const line = allLines[j] as DisasmInstLine;
+						maxPrefixLen = Math.max(maxPrefixLen, line.prefix.length);
+						maxOpcodeLen = Math.max(maxOpcodeLen, line.opcode.length);
+						if (line.ops.length > 1 && line.ops[0]) maxOp1Len = Math.max(maxOp1Len, getDisasmOperandBaseWidth(line.ops[0]));
+						if (line.ops.length > 2 && line.ops[1]) maxOp2Len = Math.max(maxOp2Len, getDisasmOperandBaseWidth(line.ops[1]));
+						if (line.ops.length > 3 && line.ops[2]) maxOp3Len = Math.max(maxOp3Len, getDisasmOperandBaseWidth(line.ops[2]));
+						j++;
+					}
+
+					for (let k = i; k < j; k++) {
+						const line = allLines[k] as DisasmInstLine;
+						const operandsText = buildAlignedOperands(line, maxOp1Len, maxOp2Len, maxOp3Len);
+						let currentLen = NON_LABEL_INDENT.length + maxPrefixLen + 4 + maxOpcodeLen;
+						if (operandsText) currentLen += 1 + operandsText.length;
+						maxLineLengthWithoutComment = Math.max(maxLineLengthWithoutComment, currentLen);
+					}
+
+					for (let k = i; k < j; k++) {
+						const line = allLines[k] as DisasmInstLine;
+						const operandsText = buildAlignedOperands(line, maxOp1Len, maxOp2Len, maxOp3Len);
+						let res = `${NON_LABEL_INDENT}${line.prefix.padEnd(maxPrefixLen, ' ')}    ${line.opcode.padEnd(maxOpcodeLen, ' ')}`;
+						if (operandsText) res += ` ${operandsText}`;
+						if (line.comment) {
+							res = res.padEnd(maxLineLengthWithoutComment + 2) + line.comment;
+						}
+						edits.push(vscode.TextEdit.replace(line.range, res));
+					}
+
+					i = j;
+					continue;
+				}
+
+				const line = allLines[i] as DisasmOtherLine;
+				if (line.type === 'comment') {
+					const normalizedIndent = line.leadingSpaces > 0 ? Math.ceil(line.leadingSpaces / 4) * 4 : 0;
+					const newIndent = Math.max(NON_LABEL_INDENT.length, normalizedIndent);
+					edits.push(vscode.TextEdit.replace(line.range, ' '.repeat(newIndent) + line.content));
+				} else if (line.type === 'label') {
+					edits.push(vscode.TextEdit.replace(line.range, line.content));
+				} else if (line.type === 'other' && line.content) {
+					edits.push(vscode.TextEdit.replace(line.range, NON_LABEL_INDENT + line.content));
+				} else {
+					edits.push(vscode.TextEdit.replace(line.range, line.content));
+				}
+				i++;
+			}
+
+			return edits;
+		}
+	});
 	// --- 9. 注册监听与 Provider ---
 	context.subscriptions.push(
 		diagnosticCollection,
@@ -521,6 +1093,9 @@ export function activate(context: vscode.ExtensionContext) {
 		referenceProvider,
 		hoverProvider,
 		definitionProvider,
+		disasmHoverProvider,
+		disasmDefinitionProvider,
+		disasmFormattingProvider,
 		vscode.window.onDidChangeActiveTextEditor(e => { if (e) updateStatusBar(e.document); }),
 		vscode.workspace.onDidChangeTextDocument(e => {
 			updateDiagnostics(e.document);

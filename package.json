@@ -2,7 +2,7 @@
   "name": "rv32i-highlight",
   "displayName": "rv32i-highlight",
   "description": "Highlighter for RV32I Assembly",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "publisher": "",
   "repository": {
     "type": "git",
@@ -19,7 +19,8 @@
     "Other"
   ],
   "activationEvents": [
-    "onLanguage:riscv"
+    "onLanguage:riscv",
+    "onLanguage:riscv-disasm"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -34,6 +35,16 @@
           ".s",
           ".asm"
         ]
+      },
+      {
+        "id": "riscv-disasm",
+        "aliases": [
+          "RISC-V Disassembly",
+          "riscv-disasm"
+        ],
+        "extensions": [
+          ".disasm"
+        ]
       }
     ],
     "grammars": [
@@ -41,6 +52,11 @@
         "language": "riscv",
         "scopeName": "source.riscv",
         "path": "./syntaxes/riscv.tmLanguage.json"
+      },
+      {
+        "language": "riscv-disasm",
+        "scopeName": "source.riscv.disasm",
+        "path": "./syntaxes/riscv-disasm.tmLanguage.json"
       }
     ],
     "semanticTokenTypes": [
@@ -58,7 +74,41 @@
           ]
         }
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "editor.tokenColorCustomizations": {
+        "textMateRules": [
+          {
+            "scope": "keyword.control.riscv.disasm",
+            "settings": {
+              "foreground": "#0DBC79"
+            }
+          },
+          {
+            "scope": "invalid.illegal.register.riscv.disasm",
+            "settings": {
+              "foreground": "#D75959"
+            }
+          },
+          {
+            "scope": "entity.name.tag.label.definition.riscv.disasm",
+            "settings": {
+              "foreground": "#E5E510"
+            }
+          },
+          {
+            "scope": [
+              "comment.block.riscv.disasm",
+              "comment.line.double-slash.riscv.disasm",
+              "comment.line.number-sign.riscv.disasm"
+            ],
+            "settings": {
+              "foreground": "#636363"
+            }
+          }
+        ]
+      }
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",
